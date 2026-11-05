@@ -354,19 +354,26 @@ run_nft_argv(char *const argv[])
 {
     pid_t pid = fork();
 
-    if (pid < 0)
+    if (pid < 0) {
+        fprintf(stderr, "fork failed: %s\n", strerror(errno));
         return -1;
+    }
 
     if (pid == 0) {
+        // Log message to stderr before executing nft command.
+        fprintf(stderr, "Executing: " NFT_PATH " ");
+        for (char *const *arg = argv; *arg; arg++) {
+            fprintf(stderr, "%s ", *arg);
+        }
+        fprintf(stderr, "\n");
 
         int nullfd = open("/dev/null", O_RDWR);
 
         if (nullfd >= 0) {
             dup2(nullfd, STDIN_FILENO);
             dup2(nullfd, STDOUT_FILENO);
-            dup2(nullfd, STDERR_FILENO);
 
-            if (nullfd > STDERR_FILENO)
+            if (nullfd > STDOUT_FILENO)
                 close(nullfd);
         }
 
@@ -378,12 +385,23 @@ run_nft_argv(char *const argv[])
     int status;
 
     while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR)
+        if (errno != EINTR) {
+            fprintf(stderr, "waitpid failed: %s\n", strerror(errno));
             return -1;
+        }
     }
 
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
         return 0;
+    } else {
+        if (WIFEXITED(status)) {
+            fprintf(stderr, "nft command exited with status %d\n", WEXITSTATUS(status));
+        } else if (WIFSIGNALED(status)) {
+            fprintf(stderr, "nft command killed by signal %d\n", WTERMSIG(status));
+        } else {
+            fprintf(stderr, "nft command failed with unknown status\n");
+        }
+    }
 
     return -1;
 }
@@ -410,7 +428,7 @@ setup_services(void)
                      v6 ? "ipv6_addr" : "ipv4_addr");
 
             char *argv[] = {
-                (char *)NFT_PATH, "add", "set", (char *)fam,
+                "add", "set", (char *)fam,
                 (char *)NFT_TABLE, (char *)set, spec, NULL
             };
 
@@ -437,7 +455,7 @@ setup_services(void)
                          hooks[h], rule->v6 ? 6 : 4);
 
                 char *argv[] = {
-                    (char *)NFT_PATH, "add", "rule", (char *)fam,
+                    "add", "rule", (char *)fam,
                     (char *)NFT_TABLE, chain,
                     (char *)fam, "saddr", setref,
                     (char *)rule->proto, "dport", ports,
@@ -477,7 +495,7 @@ init_nft(void)
     for (size_t i = 0; i < sizeof(families) / sizeof(families[0]); i++) {
 
         char *argv[] = {
-            (char *)NFT_PATH, "add", "table",
+            "add", "table",
             (char *)families[i], (char *)NFT_TABLE, NULL
         };
 
@@ -494,7 +512,7 @@ init_nft(void)
                  chains[i].hook, hook_priority);
 
         char *argv[] = {
-            (char *)NFT_PATH, "add", "chain",
+            "add", "chain",
             (char *)chains[i].family, (char *)NFT_TABLE,
             (char *)chains[i].chain, spec, NULL
         };
@@ -504,7 +522,7 @@ init_nft(void)
 
         /* Drop rules from a previous run. */
         char *flush[] = {
-            (char *)NFT_PATH, "flush", "chain",
+            "flush", "chain",
             (char *)chains[i].family, (char *)NFT_TABLE,
             (char *)chains[i].chain, NULL
         };
@@ -541,7 +559,6 @@ run_nft(const char *operation,
         snprintf(element, sizeof(element),
                  "%s timeout %us", ip, timeout);
 
-        argv[argc++] = (char *)NFT_PATH;
         argv[argc++] = "add";
         argv[argc++] = "element";
         argv[argc++] = (char *)family;
@@ -555,7 +572,6 @@ run_nft(const char *operation,
 
         snprintf(element, sizeof(element), "%s", ip);
 
-        argv[argc++] = (char *)NFT_PATH;
         argv[argc++] = "delete";
         argv[argc++] = "element";
         argv[argc++] = (char *)family;
