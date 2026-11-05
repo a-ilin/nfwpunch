@@ -17,6 +17,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#define CONFIG_FILE "/etc/nfwpunch.conf"
 #define SOCKET_PATH "/run/nfwpunch/nfwpunch.sock"
 #define NFT_PATH    "/usr/sbin/nft"
 #define NFT_TABLE   "nfwpunch"
@@ -26,23 +27,28 @@
 #define MIN_TIMEOUT 60
 #define BACKLOG     32
 
-/*
- * Only these services can be authorized.
- * Corresponding nftables sets must already exist.
- */
+#define MAX_SERVICES   64
+#define MAX_RULES      64
+#define MAX_NAME       32
+#define MAX_PORTS_TEXT 256
+
+struct rule {
+    bool v6;
+    char proto[4];
+    char ports[MAX_PORTS_TEXT];
+};
+
+/* Only services declared in the config file can be authorized. */
 struct service {
-    const char *name;
-    const char *set4;
-    const char *set6;
+    char name[MAX_NAME];
+    char set4[MAX_NAME + 16];
+    char set6[MAX_NAME + 16];
+    struct rule rules[MAX_RULES];
+    size_t rule_count;
 };
 
-static const struct service services[] = {
-    { "web",   "authorized_web4",   "authorized_web6"   },
-    { "admin", "authorized_admin4", "authorized_admin6" }
-};
-
-static const size_t service_count =
-    sizeof(services) / sizeof(services[0]);
+static struct service services[MAX_SERVICES];
+static size_t service_count;
 
 static volatile sig_atomic_t stopping = 0;
 static int listen_fd = -1;
@@ -57,6 +63,214 @@ static void on_signal(int sig)
 
     if (listen_fd >= 0)
         close(listen_fd);
+}
+
+
+static const struct service *find_service(const char *name);
+
+
+/* ---------- Configuration ---------- */
+
+/* Parses "family:proto:port,port,..." into r. */
+static int
+parse_rule(char *tok, struct rule *r)
+{
+    char *proto = strchr(tok, ':');
+    char *ports = proto ? strchr(proto + 1, ':') : NULL;
+
+    if (!proto || !ports)
+        return -1;
+
+    *proto++ = '\0';
+    *ports++ = '\0';
+
+    if (strcmp(tok, "ip") == 0)
+        r->v6 = false;
+    else if (strcmp(tok, "ip6") == 0)
+        r->v6 = true;
+    else
+        return -1;
+
+    if (strcmp(proto, "tcp") != 0 && strcmp(proto, "udp") != 0)
+        return -1;
+
+    snprintf(r->proto, sizeof(r->proto), "%s", proto);
+
+    r->ports[0] = '\0';
+
+    char *save = NULL;
+    int count = 0;
+
+    for (char *p = strtok_r(ports, ",", &save); p;
+         p = strtok_r(NULL, ",", &save)) {
+
+        char *end = NULL;
+
+        errno = 0;
+
+        unsigned long port = strtoul(p, &end, 10);
+
+        if (errno || end == p || *end || port < 1 || port > 65535)
+            return -1;
+
+        size_t len = strlen(r->ports);
+
+        if (snprintf(r->ports + len, sizeof(r->ports) - len,
+                     "%s%lu", count ? ", " : "", port)
+            >= (int)(sizeof(r->ports) - len))
+            return -1;
+
+        count++;
+    }
+
+    return count ? 0 : -1;
+}
+
+
+static int
+valid_service_name(const char *name)
+{
+    size_t len = strlen(name);
+
+    if (len == 0 || len >= MAX_NAME)
+        return 0;
+
+    for (size_t i = 0; i < len; i++) {
+        char c = name[i];
+
+        if (!((c >= 'a' && c <= 'z') ||
+              (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') ||
+              c == '_'))
+            return 0;
+    }
+
+    return 1;
+}
+
+
+static char *
+trim(char *s)
+{
+    while (*s == ' ' || *s == '\t')
+        s++;
+
+    char *e = s + strlen(s);
+
+    while (e > s && (e[-1] == ' ' || e[-1] == '\t' ||
+                     e[-1] == '\n' || e[-1] == '\r'))
+        *--e = '\0';
+
+    return s;
+}
+
+
+static int
+config_error(unsigned lineno, const char *msg)
+{
+    fprintf(stderr, "%s:%u: %s\n", CONFIG_FILE, lineno, msg);
+    return -1;
+}
+
+
+/* Reads the [services] section of CONFIG_FILE into services[]. */
+static int
+load_config(void)
+{
+    FILE *f = fopen(CONFIG_FILE, "r");
+
+    if (!f) {
+        perror(CONFIG_FILE);
+        return -1;
+    }
+
+    char buf[1024];
+    unsigned lineno = 0;
+    bool in_services = false;
+    int ret = 0;
+
+    while (ret == 0 && fgets(buf, sizeof(buf), f)) {
+
+        lineno++;
+
+        if (!strchr(buf, '\n') && !feof(f)) {
+            ret = config_error(lineno, "line too long");
+            break;
+        }
+
+        char *line = trim(buf);
+
+        if (*line == '\0' || *line == ';' || *line == '#')
+            continue;
+
+        if (*line == '[') {
+            if (strcmp(line, "[services]") != 0) {
+                ret = config_error(lineno, "unknown section");
+                break;
+            }
+
+            in_services = true;
+            continue;
+        }
+
+        char *eq = strchr(line, '=');
+
+        if (!in_services || !eq) {
+            ret = config_error(lineno, "expected name = value in [services]");
+            break;
+        }
+
+        *eq = '\0';
+
+        char *name = trim(line);
+        char *value = trim(eq + 1);
+
+        if (!valid_service_name(name)) {
+            ret = config_error(lineno, "invalid service name");
+            break;
+        }
+
+        if (service_count >= MAX_SERVICES || find_service(name)) {
+            ret = config_error(lineno, "too many or duplicate services");
+            break;
+        }
+
+        struct service *svc = &services[service_count];
+
+        memset(svc, 0, sizeof(*svc));
+        snprintf(svc->name, sizeof(svc->name), "%s", name);
+        snprintf(svc->set4, sizeof(svc->set4), "authorized_%s4", name);
+        snprintf(svc->set6, sizeof(svc->set6), "authorized_%s6", name);
+
+        char *save = NULL;
+
+        for (char *tok = strtok_r(value, " \t", &save); tok;
+             tok = strtok_r(NULL, " \t", &save)) {
+
+            if (svc->rule_count >= MAX_RULES ||
+                parse_rule(tok, &svc->rules[svc->rule_count]) != 0) {
+                ret = config_error(lineno, "invalid or too many port specifications");
+                break;
+            }
+
+            svc->rule_count++;
+        }
+
+        if (ret == 0 && svc->rule_count == 0)
+            ret = config_error(lineno, "service has no ports");
+
+        if (ret == 0)
+            service_count++;
+    }
+
+    fclose(f);
+
+    if (ret == 0 && service_count == 0) {
+        fprintf(stderr, "%s: no services defined\n", CONFIG_FILE);
+        ret = -1;
+    }
+
+    return ret;
 }
 
 
@@ -149,6 +363,71 @@ run_nft_argv(char *const argv[])
 }
 
 
+/* Creates the sets of each service and the accept rules referencing them. */
+static int
+setup_services(void)
+{
+    static const char *hooks[] = { "input", "forward" };
+
+    for (size_t i = 0; i < service_count; i++) {
+
+        const struct service *svc = &services[i];
+
+        for (int v6 = 0; v6 < 2; v6++) {
+
+            const char *fam = v6 ? "ip6" : "ip";
+            const char *set = v6 ? svc->set6 : svc->set4;
+            char spec[96];
+
+            snprintf(spec, sizeof(spec),
+                     "{ type %s; flags timeout; size 10000; }",
+                     v6 ? "ipv6_addr" : "ipv4_addr");
+
+            char *argv[] = {
+                (char *)NFT_PATH, "add", "set", (char *)fam,
+                (char *)NFT_TABLE, (char *)set, spec, NULL
+            };
+
+            if (run_nft_argv(argv) != 0)
+                return -1;
+        }
+
+        for (size_t r = 0; r < svc->rule_count; r++) {
+
+            const struct rule *rule = &svc->rules[r];
+            const char *fam = rule->v6 ? "ip6" : "ip";
+            char setref[MAX_NAME + 20];
+            char ports[MAX_PORTS_TEXT + 4];
+
+            snprintf(setref, sizeof(setref), "@%s",
+                     rule->v6 ? svc->set6 : svc->set4);
+            snprintf(ports, sizeof(ports), "{ %s }", rule->ports);
+
+            for (size_t h = 0; h < 2; h++) {
+
+                char chain[48];
+
+                snprintf(chain, sizeof(chain), "nfwpunch_%s%d",
+                         hooks[h], rule->v6 ? 6 : 4);
+
+                char *argv[] = {
+                    (char *)NFT_PATH, "add", "rule", (char *)fam,
+                    (char *)NFT_TABLE, chain,
+                    (char *)fam, "saddr", setref,
+                    (char *)rule->proto, "dport", ports,
+                    "accept", NULL
+                };
+
+                if (run_nft_argv(argv) != 0)
+                    return -1;
+            }
+        }
+    }
+
+    return 0;
+}
+
+
 /*
  * Creates tables and base chains used by the daemon.
  * Idempotent: "add" does not fail if objects already exist.
@@ -196,9 +475,19 @@ init_nft(void)
 
         if (run_nft_argv(argv) != 0)
             return -1;
+
+        /* Drop rules from a previous run. */
+        char *flush[] = {
+            (char *)NFT_PATH, "flush", "chain",
+            (char *)chains[i].family, (char *)NFT_TABLE,
+            (char *)chains[i].chain, NULL
+        };
+
+        if (run_nft_argv(flush) != 0)
+            return -1;
     }
 
-    return 0;
+    return setup_services();
 }
 
 
@@ -211,6 +500,7 @@ init_nft(void)
  */
 static int
 run_nft(const char *operation,
+        const char *family,
         const char *setname,
         const char *ip,
         unsigned timeout)
@@ -228,7 +518,7 @@ run_nft(const char *operation,
         argv[argc++] = (char *)NFT_PATH;
         argv[argc++] = "add";
         argv[argc++] = "element";
-        argv[argc++] = "inet";
+        argv[argc++] = (char *)family;
         argv[argc++] = NFT_TABLE;
         argv[argc++] = (char *)setname;
         argv[argc++] = "{";
@@ -242,7 +532,7 @@ run_nft(const char *operation,
         argv[argc++] = (char *)NFT_PATH;
         argv[argc++] = "delete";
         argv[argc++] = "element";
-        argv[argc++] = "inet";
+        argv[argc++] = (char *)family;
         argv[argc++] = NFT_TABLE;
         argv[argc++] = (char *)setname;
         argv[argc++] = "{";
@@ -373,6 +663,7 @@ handle_client(int fd)
 
     const char *setname =
         family == AF_INET ? svc->set4 : svc->set6;
+    const char *nftfam = family == AF_INET ? "ip" : "ip6";
 
 
     /* ---------- Authorize ---------- */
@@ -403,7 +694,7 @@ handle_client(int fd)
 
         unsigned timeout = (unsigned)parsed;
 
-        if (run_nft("add", setname, ip, timeout) == 0)
+        if (run_nft("add", nftfam, setname, ip, timeout) == 0)
             reply(fd, "OK authorized\n");
         else
             reply(fd, "ERROR firewall_operation_failed\n");
@@ -421,7 +712,7 @@ handle_client(int fd)
             return;
         }
 
-        if (run_nft("delete", setname, ip, 0) == 0)
+        if (run_nft("delete", nftfam, setname, ip, 0) == 0)
             reply(fd, "OK revoked\n");
         else
             reply(fd, "ERROR firewall_operation_failed\n");
@@ -439,6 +730,9 @@ int
 main(void)
 {
     struct sockaddr_un addr;
+
+    if (load_config() != 0)
+        return 1;
 
     struct sigaction sa;
 
