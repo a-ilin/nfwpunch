@@ -1,0 +1,30 @@
+[Unit]
+Description=Dynamic nftables authorization daemon
+After=nftables.service
+Requires=nftables.service
+
+[Service]
+Type=simple
+
+User=root
+Group=root
+
+ExecStart=/usr/sbin/nfwpunchd
+
+Restart=on-failure
+RestartSec=2
+
+RuntimeDirectory=nfwpunch
+RuntimeDirectoryMode=0750
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE
+AmbientCapabilities=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+table inet dynamic_access {
+    set authorized_web4 {
+        type ipv4_addr
+        flags timeout
+        timeout 30m
+        size 10000
+    }
+
+    set authorized_web6 {
+        type ipv6_addr
+        flags timeout
+        timeout 30m
+        size 10000
+    }
+
+    set authorized_admin4 {
+        type ipv4_addr
+        flags timeout
+        timeout 30m
+        size 10000
+    }
+
+    set authorized_admin6 {
+        type ipv6_addr
+        flags timeout
+        timeout 30m
+        size 10000
+    }
+}

@@ -1,0 +1,5 @@
+# Ignore binary
+/bin/**
+
+# Ignore local VSCode settings
+.vscode/**
