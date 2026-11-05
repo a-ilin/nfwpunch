@@ -292,8 +292,8 @@ load_config(void)
     fclose(f);
 
     if (ret == 0 && service_count == 0) {
+        // Allow empty config without services, but warn the user.
         fprintf(stderr, "%s: no services defined\n", CONFIG_FILE);
-        ret = -1;
     }
 
     return ret;

@@ -3,37 +3,28 @@ nfwpunch(8)
 
 # NAME
 
-*nfwpunch* - Tool for dynamic firewall hole punching daemon for nftables.
+*nfwpunch* - firewall hole punching daemon for nftables.
 
 
 # SYNOPSIS
 
-*nfwpunchd* [*options*]
+*nfwpunchd*
 
 
 # DESCRIPTION
 
-*nfwpunch* is a tool for dynamic firewall hole punching daemon for nftables.
+*nfwpunch* is a dynamic firewall hole punching daemon for nftables.
 
+It runs as a daemon, listening for requests on a UNIX socket.
+Typically, a web server is configured to conduct user authentication and authorization,
+following the request to grant temporary access thru the firewall to the configured service ports.
 
-
-
-# OPTIONS
-
-*-h*, *--help*++
-Show help message and all options.
-
-*-vv*, *--verbose*++
-Use verbose logging.
-
-*-n*, *--dry-run*++
-Display the expected link name changes, but do not execute actual renaming.
-
-*-c*, *--config*++
-Specify path to the configuration file.
 
 # CONFIGURATION
 
+The configuration consists of 2 parts:
+* nfwpunchd configuration: /etc/nfwpunch.conf
+* web server configuration: nginx example is available at /usr/share/doc/nfwpunch/nfwpunchd-nginx.conf
 
 
 # AUTHORS
