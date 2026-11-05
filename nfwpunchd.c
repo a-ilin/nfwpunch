@@ -51,6 +51,7 @@ struct service {
 static struct service services[MAX_SERVICES];
 static size_t service_count;
 static int hook_priority;
+static unsigned long mark_accepted;
 
 static volatile sig_atomic_t stopping = 0;
 static int listen_fd = -1;
@@ -190,6 +191,7 @@ load_config(void)
     unsigned lineno = 0;
     enum { SECTION_NONE, SECTION_GLOBAL, SECTION_SERVICES } section = SECTION_NONE;
     bool priority_seen = false;
+    bool mark_seen = false;
     int ret = 0;
 
     while (ret == 0 && fgets(buf, sizeof(buf), f)) {
@@ -231,12 +233,29 @@ load_config(void)
         char *value = trim(eq + 1);
 
         if (section == SECTION_GLOBAL) {
+            char *end = NULL;
+
+            if (strcmp(name, "mark_accepted") == 0 && !mark_seen) {
+                errno = 0;
+
+                unsigned long mark = strtoul(value, &end, 0);
+
+                if (errno || end == value || *end != '\0' ||
+                    *value == '-' || mark > 0xFFFFFFFFUL) {
+                    ret = config_error(lineno, "invalid mark_accepted value");
+                    break;
+                }
+
+                mark_accepted = mark;
+                mark_seen = true;
+                continue;
+            }
+
             if (strcmp(name, "hook_priority") != 0 || priority_seen) {
                 ret = config_error(lineno, "unknown or duplicate global option");
                 break;
             }
 
-            char *end = NULL;
             errno = 0;
             long parsed = strtol(value, &end, 10);
 
@@ -454,13 +473,36 @@ setup_services(void)
                 snprintf(chain, sizeof(chain), "nfwpunch_%s%d",
                          hooks[h], rule->v6 ? 6 : 4);
 
-                char *argv[] = {
-                    "add", "rule", (char *)fam,
-                    (char *)NFT_TABLE, chain,
-                    (char *)fam, "saddr", setref,
-                    (char *)rule->proto, "dport", ports,
-                    "accept", NULL
-                };
+                char *argv[20];
+                int argc = 0;
+                char markval[sizeof(unsigned long) * 3 + 1];
+
+                argv[argc++] = "add";
+                argv[argc++] = "rule";
+                argv[argc++] = (char *)fam;
+                argv[argc++] = (char *)NFT_TABLE;
+                argv[argc++] = chain;
+                argv[argc++] = (char *)fam;
+                argv[argc++] = "saddr";
+                argv[argc++] = setref;
+                argv[argc++] = (char *)rule->proto;
+                argv[argc++] = "dport";
+                argv[argc++] = ports;
+
+                if (mark_accepted != 0) {
+                    snprintf(markval, sizeof(markval), "%lu", mark_accepted);
+
+                    argv[argc++] = "meta";
+                    argv[argc++] = "mark";
+                    argv[argc++] = "set";
+                    argv[argc++] = "meta";
+                    argv[argc++] = "mark";
+                    argv[argc++] = "|";
+                    argv[argc++] = markval;
+                }
+
+                argv[argc++] = "accept";
+                argv[argc] = NULL;
 
                 if (run_nft_argv(argv) != 0)
                     return -1;
