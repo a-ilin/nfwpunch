@@ -7,6 +7,5 @@ Depends: libc6
 Maintainer: Aleksei Ilin <a@a-ilin.dev>
 Description: HTTP server of a ZIP file contents
  *nfwpunch* is a dynamic firewall hole punching daemon for nftables.
-
  It allows to expose a service running on a private network to the public Internet by creating temporary firewall rules for incoming connections.
  The daemon may be called by Nginx or Apache web server after a user is authorized.

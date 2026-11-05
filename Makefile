@@ -7,7 +7,11 @@ endif
 
 APP_VERSION_NUM := $(shell echo "$(APP_VERSION)" | sed 's/^v//')
 
-CFLAGS := -O2 -Wall -Wextra -Wpedantic -DAPP_VERSION_NUM=\"$(APP_VERSION_NUM)\"
+CFLAGS := -O2 -Wall -Wextra -Wpedantic \
+	-D_FORTIFY_SOURCE=2 -fstack-protector-strong \
+	-Wformat -Werror=format-security \
+	-fPIE -pie -Wl,-z,relro,-z,now \
+	-DAPP_VERSION_NUM=\"$(APP_VERSION_NUM)\"
 
 DEB_ROOT := $(MAKEFILE_DIR)/bin/deb/nfwpunch_$(APP_VERSION_NUM)-1
 
