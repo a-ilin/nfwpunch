@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <grp.h>
+#include <limits.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <stdbool.h>
@@ -49,6 +50,7 @@ struct service {
 
 static struct service services[MAX_SERVICES];
 static size_t service_count;
+static int hook_priority;
 
 static volatile sig_atomic_t stopping = 0;
 static int listen_fd = -1;
@@ -173,7 +175,7 @@ config_error(unsigned lineno, const char *msg)
 }
 
 
-/* Reads the [services] section of CONFIG_FILE into services[]. */
+/* Reads global options and service declarations from CONFIG_FILE. */
 static int
 load_config(void)
 {
@@ -186,7 +188,8 @@ load_config(void)
 
     char buf[1024];
     unsigned lineno = 0;
-    bool in_services = false;
+    enum { SECTION_NONE, SECTION_GLOBAL, SECTION_SERVICES } section = SECTION_NONE;
+    bool priority_seen = false;
     int ret = 0;
 
     while (ret == 0 && fgets(buf, sizeof(buf), f)) {
@@ -204,18 +207,20 @@ load_config(void)
             continue;
 
         if (*line == '[') {
-            if (strcmp(line, "[services]") != 0) {
+            if (strcmp(line, "[global]") == 0)
+                section = SECTION_GLOBAL;
+            else if (strcmp(line, "[services]") == 0)
+                section = SECTION_SERVICES;
+            else {
                 ret = config_error(lineno, "unknown section");
                 break;
             }
-
-            in_services = true;
             continue;
         }
 
         char *eq = strchr(line, '=');
 
-        if (!in_services || !eq) {
+        if (section == SECTION_NONE || !eq) {
             ret = config_error(lineno, "expected name = value in [services]");
             break;
         }
@@ -224,6 +229,27 @@ load_config(void)
 
         char *name = trim(line);
         char *value = trim(eq + 1);
+
+        if (section == SECTION_GLOBAL) {
+            if (strcmp(name, "hook_priority") != 0 || priority_seen) {
+                ret = config_error(lineno, "unknown or duplicate global option");
+                break;
+            }
+
+            char *end = NULL;
+            errno = 0;
+            long parsed = strtol(value, &end, 10);
+
+            if (errno == ERANGE || end == value || *end != '\0' ||
+                parsed < INT_MIN || parsed > INT_MAX) {
+                ret = config_error(lineno, "invalid hook priority");
+                break;
+            }
+
+            hook_priority = (int)parsed;
+            priority_seen = true;
+            continue;
+        }
 
         if (!valid_service_name(name)) {
             ret = config_error(lineno, "invalid service name");
@@ -464,8 +490,8 @@ init_nft(void)
         char spec[96];
 
         snprintf(spec, sizeof(spec),
-                 "{ type filter hook %s priority 0; policy accept; }",
-                 chains[i].hook);
+                 "{ type filter hook %s priority %d; policy accept; }",
+                 chains[i].hook, hook_priority);
 
         char *argv[] = {
             (char *)NFT_PATH, "add", "chain",
