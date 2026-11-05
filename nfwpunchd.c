@@ -453,19 +453,11 @@ main(void)
     }
 
 
-    /* Restrict access to the nginx-auth group. */
+    /* Restrict access to the process's primary group. */
 
-    struct group *gr = getgrnam("nginx-auth");
+    gid_t gid = getegid();
 
-    if (!gr) {
-        fprintf(stderr,
-                "Group nginx-auth does not exist\n");
-
-        unlink(SOCKET_PATH);
-        return 1;
-    }
-
-    if (chown(SOCKET_PATH, 0, gr->gr_gid) != 0 ||
+    if (chown(SOCKET_PATH, 0, gid) != 0 ||
         chmod(SOCKET_PATH, 0660) != 0) {
 
         perror("socket permissions");
