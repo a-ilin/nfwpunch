@@ -757,6 +757,8 @@ main(void)
 {
     struct sockaddr_un addr;
 
+    fprintf(stderr, "nfwpunchd v%s is about to start\n", APP_VERSION_NUM);
+
     if (load_config() != 0)
         return 1;
 
@@ -866,6 +868,8 @@ main(void)
 
     /* ---------- Accept loop ---------- */
 
+    fprintf(stderr, "nfwpunchd v%s started\n", APP_VERSION_NUM);
+
     while (!stopping) {
 
         int client = accept4(
@@ -894,6 +898,8 @@ main(void)
 
 
     unlink(SOCKET_PATH);
+
+    fprintf(stderr, "nfwpunchd v%s finished\n", APP_VERSION_NUM);
 
     return 0;
 }
