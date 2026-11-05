@@ -1,4 +1,3 @@
-
 #define _GNU_SOURCE
 
 #include <arpa/inet.h>
@@ -20,7 +19,7 @@
 
 #define SOCKET_PATH "/run/nfwpunch/nfwpunch.sock"
 #define NFT_PATH    "/usr/sbin/nft"
-#define NFT_TABLE   "dynamic_access"
+#define NFT_TABLE   "nfwpunch"
 
 #define MAX_LINE    256
 #define MAX_TIMEOUT 3600
@@ -107,6 +106,103 @@ valid_ip(const char *text,
 /* ---------- nftables execution ---------- */
 
 /*
+ * Executes nft with a fixed argument vector (argv is NULL-terminated).
+ * No shell is involved.
+ */
+static int
+run_nft_argv(char *const argv[])
+{
+    pid_t pid = fork();
+
+    if (pid < 0)
+        return -1;
+
+    if (pid == 0) {
+
+        int nullfd = open("/dev/null", O_RDWR);
+
+        if (nullfd >= 0) {
+            dup2(nullfd, STDIN_FILENO);
+            dup2(nullfd, STDOUT_FILENO);
+            dup2(nullfd, STDERR_FILENO);
+
+            if (nullfd > STDERR_FILENO)
+                close(nullfd);
+        }
+
+        execv(NFT_PATH, argv);
+
+        _exit(127);
+    }
+
+    int status;
+
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno != EINTR)
+            return -1;
+    }
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
+        return 0;
+
+    return -1;
+}
+
+
+/*
+ * Creates tables and base chains used by the daemon.
+ * Idempotent: "add" does not fail if objects already exist.
+ */
+static int
+init_nft(void)
+{
+    static const struct {
+        const char *family;
+        const char *chain;
+        const char *hook;
+    } chains[] = {
+        { "ip",  "nfwpunch_input4",   "input"   },
+        { "ip6", "nfwpunch_input6",   "input"   },
+        { "ip",  "nfwpunch_forward4", "forward" },
+        { "ip6", "nfwpunch_forward6", "forward" },
+    };
+
+    static const char *families[] = { "ip", "ip6" };
+
+    for (size_t i = 0; i < sizeof(families) / sizeof(families[0]); i++) {
+
+        char *argv[] = {
+            (char *)NFT_PATH, "add", "table",
+            (char *)families[i], (char *)NFT_TABLE, NULL
+        };
+
+        if (run_nft_argv(argv) != 0)
+            return -1;
+    }
+
+    for (size_t i = 0; i < sizeof(chains) / sizeof(chains[0]); i++) {
+
+        char spec[96];
+
+        snprintf(spec, sizeof(spec),
+                 "{ type filter hook %s priority 0; policy accept; }",
+                 chains[i].hook);
+
+        char *argv[] = {
+            (char *)NFT_PATH, "add", "chain",
+            (char *)chains[i].family, (char *)NFT_TABLE,
+            (char *)chains[i].chain, spec, NULL
+        };
+
+        if (run_nft_argv(argv) != 0)
+            return -1;
+    }
+
+    return 0;
+}
+
+
+/*
  * Executes nft directly.
  *
  * No shell is involved.
@@ -159,40 +255,7 @@ run_nft(const char *operation,
 
     argv[argc] = NULL;
 
-    pid_t pid = fork();
-
-    if (pid < 0)
-        return -1;
-
-    if (pid == 0) {
-
-        int nullfd = open("/dev/null", O_RDWR);
-
-        if (nullfd >= 0) {
-            dup2(nullfd, STDIN_FILENO);
-            dup2(nullfd, STDOUT_FILENO);
-            dup2(nullfd, STDERR_FILENO);
-
-            if (nullfd > STDERR_FILENO)
-                close(nullfd);
-        }
-
-        execv(NFT_PATH, argv);
-
-        _exit(127);
-    }
-
-    int status;
-
-    while (waitpid(pid, &status, 0) < 0) {
-        if (errno != EINTR)
-            return -1;
-    }
-
-    if (WIFEXITED(status) && WEXITSTATUS(status) == 0)
-        return 0;
-
-    return -1;
+    return run_nft_argv(argv);
 }
 
 
@@ -472,6 +535,14 @@ main(void)
         return 1;
     }
 
+  /* Call init_nft() to create the necessary nftables tables and chains */
+
+    if (init_nft() != 0) {
+        fprintf(stderr, "failed to initialize nftables\n");
+        close(listen_fd);
+        unlink(SOCKET_PATH);
+        return 1;
+    }
 
     /* ---------- Accept loop ---------- */
 
