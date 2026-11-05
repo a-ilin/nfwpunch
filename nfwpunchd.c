@@ -380,7 +380,7 @@ run_nft_argv(char *const argv[])
 
     if (pid == 0) {
         // Log message to stderr before executing nft command.
-        fprintf(stderr, "Executing: " NFT_PATH " ");
+        fprintf(stderr, "Executing nft: ");
         for (char *const *arg = argv; *arg; arg++) {
             fprintf(stderr, "%s ", *arg);
         }
@@ -447,6 +447,7 @@ setup_services(void)
                      v6 ? "ipv6_addr" : "ipv4_addr");
 
             char *argv[] = {
+                NFT_PATH,
                 "add", "set", (char *)fam,
                 (char *)NFT_TABLE, (char *)set, spec, NULL
             };
@@ -477,6 +478,7 @@ setup_services(void)
                 int argc = 0;
                 char markval[sizeof(unsigned long) * 3 + 1];
 
+                argv[argc++] = NFT_PATH;
                 argv[argc++] = "add";
                 argv[argc++] = "rule";
                 argv[argc++] = (char *)fam;
@@ -538,7 +540,7 @@ init_nft(void)
 
         /* Destroy tables, as changed hook priority makes "add chain" fail on existing chains. */
         char *destroy_table[] = {
-            "destroy", "table",
+            NFT_PATH, "destroy", "table",
             (char *)families[i], (char *)NFT_TABLE, NULL
         };
 
@@ -546,7 +548,7 @@ init_nft(void)
             return -1;
 
         char *add_table[] = {
-            "add", "table",
+            NFT_PATH, "add", "table",
             (char *)families[i], (char *)NFT_TABLE, NULL
         };
 
@@ -563,7 +565,7 @@ init_nft(void)
                  chains[i].hook, hook_priority);
 
         char *argv[] = {
-            "add", "chain",
+            NFT_PATH, "add", "chain",
             (char *)chains[i].family, (char *)NFT_TABLE,
             (char *)chains[i].chain, spec, NULL
         };
@@ -573,7 +575,7 @@ init_nft(void)
 
         /* Drop rules from a previous run. */
         char *flush[] = {
-            "flush", "chain",
+            NFT_PATH, "flush", "chain",
             (char *)chains[i].family, (char *)NFT_TABLE,
             (char *)chains[i].chain, NULL
         };
@@ -610,6 +612,7 @@ run_nft(const char *operation,
         snprintf(element, sizeof(element),
                  "%s timeout %us", ip, timeout);
 
+        argv[argc++] = NFT_PATH;
         argv[argc++] = "add";
         argv[argc++] = "element";
         argv[argc++] = (char *)family;
@@ -623,6 +626,7 @@ run_nft(const char *operation,
 
         snprintf(element, sizeof(element), "%s", ip);
 
+        argv[argc++] = NFT_PATH;
         argv[argc++] = "delete";
         argv[argc++] = "element";
         argv[argc++] = (char *)family;
