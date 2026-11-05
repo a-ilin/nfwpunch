@@ -536,12 +536,21 @@ init_nft(void)
 
     for (size_t i = 0; i < sizeof(families) / sizeof(families[0]); i++) {
 
-        char *argv[] = {
+        /* Destroy tables, as changed hook priority makes "add chain" fail on existing chains. */
+        char *destroy_table[] = {
+            "destroy", "table",
+            (char *)families[i], (char *)NFT_TABLE, NULL
+        };
+
+        if (run_nft_argv(destroy_table) != 0)
+            return -1;
+
+        char *add_table[] = {
             "add", "table",
             (char *)families[i], (char *)NFT_TABLE, NULL
         };
 
-        if (run_nft_argv(argv) != 0)
+        if (run_nft_argv(add_table) != 0)
             return -1;
     }
 
