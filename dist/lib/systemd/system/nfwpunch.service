@@ -6,7 +6,7 @@ Requires=nftables.service
 [Service]
 Type=simple
 
-User=root
+User=www-data
 Group=www-data
 
 ExecStart=/usr/sbin/nfwpunchd
@@ -23,7 +23,7 @@ ProtectHome=true
 ProtectSystem=strict
 
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_DAC_OVERRIDE
+CapabilityBoundingSet=CAP_NET_ADMIN
 AmbientCapabilities=CAP_NET_ADMIN
 
 [Install]

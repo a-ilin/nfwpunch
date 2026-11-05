@@ -913,7 +913,7 @@ main(void)
 
     gid_t gid = getegid();
 
-    if (chown(SOCKET_PATH, 0, gid) != 0 ||
+    if (chown(SOCKET_PATH, -1, gid) != 0 ||
         chmod(SOCKET_PATH, 0660) != 0) {
 
         perror("socket permissions");
