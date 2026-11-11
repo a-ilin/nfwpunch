@@ -474,7 +474,8 @@ setup_services(void)
                 snprintf(chain, sizeof(chain), "nfwpunch_%s%d",
                          hooks[h], rule->v6 ? 6 : 4);
 
-                char *argv[20];
+                /* Reserve 20 arguments plus the NULL terminator when setting a mark. */
+                char *argv[21];
                 int argc = 0;
                 char markval[sizeof(unsigned long) * 3 + 1];
 
