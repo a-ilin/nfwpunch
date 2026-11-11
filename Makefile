@@ -52,7 +52,7 @@ install: nfwpunchd
 	install -m 0644 -D $(MAKEFILE_DIR)/LICENSE /usr/share/doc/nfwpunch/copyright
 
 deb: nfwpunchd doc
-	$(eval $@_ARCH = $(shell go env GOARCH))
+	$(eval $@_ARCH = $(shell gcc -dumpmachine | cut -d'-' -f1 | sed 's/x86_64/amd64/'))
 
 	rm -rf $(MAKEFILE_DIR)/bin/deb
 
