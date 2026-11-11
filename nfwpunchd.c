@@ -24,13 +24,13 @@
 #define NFT_TABLE   "nfwpunch"
 
 #define MAX_LINE    256
-#define MAX_TIMEOUT 3600
+#define MAX_TIMEOUT 24*3600
 #define MIN_TIMEOUT 60
 #define BACKLOG     32
 
-#define MAX_SERVICES   64
+#define MAX_SERVICES   128
 #define MAX_RULES      64
-#define MAX_NAME       32
+#define MAX_NAME       64
 #define MAX_PORTS_TEXT 256
 
 struct rule {
