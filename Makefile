@@ -25,7 +25,6 @@ DEB_ROOT := $(MAKEFILE_DIR)/bin/deb/nfwpunch_$(APP_VERSION_NUM)-1
 	install
 
 all: \
-	nfwpunchd \
 	deb
 
 $(MAKEFILE_DIR)/bin/nfwpunchd:
@@ -41,7 +40,9 @@ $(MAKEFILE_DIR)/bin/nfwpunch.8.gz: $(MAKEFILE_DIR)/doc/nfwpunch.8.scd
 
 clean:
 	@ rm $(MAKEFILE_DIR)/bin/nfwpunchd > /dev/null 2>&1 || true
+	@ rm -f $(MAKEFILE_DIR)/bin/nfwpunch.8.gz > /dev/null 2>&1 || true
 	@ rm -rf $(MAKEFILE_DIR)/bin/deb > /dev/null 2>&1 || true
+	@ rm -f $(MAKEFILE_DIR)/bin/nfwpunch_*.deb > /dev/null 2>&1 || true
 
 install: nfwpunchd
 	install -m 0755 -D $(MAKEFILE_DIR)/bin/nfwpunchd /usr/sbin/nfwpunchd
