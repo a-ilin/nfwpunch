@@ -1,11 +1,5 @@
 # Dynamic firewall hole punching daemon to use with Nginx or Apache
 
-A good way to implement this is to treat Nginx as the authentication gateway and nftables as the network access enforcement layer.
-
-The key requirement is that Nginx runs as a restricted user, while nftables changes require root privileges. You should not give Nginx unrestricted access to the firewall.
-
-Instead, use a small, privileged helper that accepts narrowly defined requests from Nginx and manages temporary firewall permissions.
-
 ## Project layout
 
 The project layout is as follows:
@@ -55,6 +49,30 @@ nftables
 - Explicit authorize and revoke operations.
 - Root privileges confined to the daemon.
 The implementation below uses a simple line-based protocol rather than a full JSON parser. This keeps the daemon small and avoids adding a JSON library dependency.
+
+## Code style
+
+The code follows these conventions:
+
+- Indentation with 4 spaces.
+- Braces on the same line as the control statement.
+- Descriptive variable and function names.
+- Comments for non-obvious logic.
+- Consistent use of `const` for immutable values.
+- Error handling with clear messages.
+- Minimal use of global variables.
+- Functions kept short and focused on a single task.
+
+## Review
+
+Code changes should be reviewed for adherence to the code style, security properties, and correct implementation of the API.
+
+Pay close attention to potential security issues: stack overflows, buffer overflows, integer overflows, wrong format specifiers.
+Fix any encountered issue and provide a related comment.
+
+## Testing
+
+Each change should be tested with a command to build the project, such as `make nfwpunchd`.
 
 ## Example API calls
 

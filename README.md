@@ -2,15 +2,17 @@
 
 **nfwpunch** is a dynamic firewall hole punching daemon for nftables.
 
-It runs as a daemon, listening for requests on a UNIX socket.
+It works as an intermediary between Nginx as the authentication gateway and nftables as the network access enforcement layer.
+
+The service runs as a daemon, listening for requests on a UNIX socket.
 
 A typical scenario involves the following setup:
 
-1. A service hidden behind a firewall.
-2. A web server to conduct user authentication and authorization.
-3. Dynamic firewall hole puncher.
+1. A user-configured service hidden behind a firewall.
+2. A web server or reverse proxy to conduct user authentication and authorization.
+3. Dynamic firewall hole puncher (this service).
 
-Once the web server conducts user authentication and authorization, it sends a request to the daemon to grant temporary access thru the firewall to the configured service ports for client IP address.
+Once the web server conducts user authentication and authorization, it sends a request to this daemon to grant temporary access thru the firewall to the configured service ports for client IP address.
 
 ## Security considerations
 
@@ -35,7 +37,7 @@ To compile the program yourself install the required dependencies:
 
 To build the program: `make nfwpunchd`.
 
-To build the man page: `make doc`.
+To build the manual page: `make doc`.
 
 To build DEB package: `make deb`.
 
