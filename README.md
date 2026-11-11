@@ -58,6 +58,8 @@ Once the program is installed, a new `systemd` service is added (the service is 
 
 Refer to [the manual page](doc/nfwpunch.8.scd) for the configuration options and working modes of the program.
 
+Example Nginx configuration is available in the `example` directory: [nfwpunchd-nginx.conf](example/nfwpunchd-nginx.conf).
+
 ## Authors
 
 **nfwpunch** is written by Aleksei Ilin.
