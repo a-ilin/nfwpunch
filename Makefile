@@ -51,6 +51,9 @@ install: nfwpunchd
 	[ -e $(MAKEFILE_DIR)/bin/nfwpunch.8.gz ] && \
 		install -m 0644 -D -t /usr/share/man/man8 $(MAKEFILE_DIR)/bin/nfwpunch.8.gz
 	install -m 0644 -D $(MAKEFILE_DIR)/LICENSE /usr/share/doc/nfwpunch/copyright
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-lua/nfwpunchd-nginx.conf /usr/share/doc/nfwpunch/examples/nginx-lua/nfwpunchd-nginx.conf
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-perl/nfwpunchd-nginx.conf /usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.conf
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-perl/nfwpunchd-nginx.pl /usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.pl
 
 deb: nfwpunchd doc
 	$(eval $@_ARCH = $(shell gcc -dumpmachine | cut -d'-' -f1 | sed 's/x86_64/amd64/'))
@@ -69,7 +72,9 @@ deb: nfwpunchd doc
 	install -m 0644 -D -t $(DEB_ROOT)/lib/systemd/system $(MAKEFILE_DIR)/dist/lib/systemd/system/nfwpunch.service
 	install -m 0644 -D -t $(DEB_ROOT)/usr/share/man/man8 $(MAKEFILE_DIR)/bin/nfwpunch.8.gz
 	install -m 0644 -D $(MAKEFILE_DIR)/LICENSE $(DEB_ROOT)/usr/share/doc/nfwpunch/copyright
-	install -m 0644 -D $(MAKEFILE_DIR)/example/nfwpunchd-nginx.conf $(DEB_ROOT)/usr/share/doc/nfwpunch/nfwpunchd-nginx.conf
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-lua/nfwpunchd-nginx.conf $(DEB_ROOT)/usr/share/doc/nfwpunch/examples/nginx-lua/nfwpunchd-nginx.conf
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-perl/nfwpunchd-nginx.conf $(DEB_ROOT)/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.conf
+	install -m 0644 -D $(MAKEFILE_DIR)/examples/nginx-perl/nfwpunchd-nginx.pl $(DEB_ROOT)/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.pl
 
 	cd $(MAKEFILE_DIR)/bin/deb && dpkg-deb --build nfwpunch_$(APP_VERSION_NUM)-1 && \
 		mv nfwpunch_$(APP_VERSION_NUM)-1.deb ../nfwpunch_$(APP_VERSION_NUM)-1-${$@_ARCH}.deb

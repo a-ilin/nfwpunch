@@ -24,7 +24,8 @@ following the request to grant temporary access thru the firewall to the configu
 
 The configuration consists of 2 parts:
 . nfwpunchd configuration: _/etc/nfwpunch.conf_.
-. Web server configuration: Nginx example is available at _/usr/share/doc/nfwpunch/nfwpunchd-nginx.conf_.
+. Web server configuration: Nginx examples are available at _/usr/share/doc/nfwpunch/examples/nginx-lua/nfwpunchd-nginx.conf_,
+  _/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.conf_, and _/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.pl_.
 
 ## /etc/nfwpunch.conf
 
@@ -35,7 +36,12 @@ Refer to the installed configuration file for available options.
 
 ## Web server configuration
 
-The provided example is for Nginx server: _/usr/share/doc/nfwpunch/nfwpunchd-nginx.conf_.
+The provided examples are for Nginx server with either Lua or Perl module:
+_/usr/share/doc/nfwpunch/examples/nginx-lua/nfwpunchd-nginx.conf_,
+_/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.conf_, and
+_/usr/share/doc/nfwpunch/examples/nginx-perl/nfwpunchd-nginx.pl_.
+
+Either variant may be used as long as it writes the expected UNIX socket protocol requests.
 
 Other web servers can be used as well with this service, assuming the UNIX socket protocol is followed.
 
